@@ -1,0 +1,14 @@
+{
+  "time": "2026-11-17T18:00:00.000Z",
+  "boot": "2026-11-15T14:30:00.000Z",
+  "on_ac": true,
+  "battery_pct": 79,
+  "cpu_pct": 12,
+  "ram_used_pct": 48,
+  "disk_free_gb": 186.4,
+  "watch": [
+    { "name": "Honeygain", "running": true },
+    { "name": "EarnApp", "running": true }
+  ],
+  "version": 1
+}

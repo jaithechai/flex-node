@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flex Node</title>
+<style>
+:root{color-scheme:light dark;--bg:#f3f5f8;--card:#fff;--ink:#172033;--muted:#536176;--line:#dbe1e8;--ok:#146c39;--degraded:#895400;--offline:#b32732}
+@media(prefers-color-scheme:dark){:root{--bg:#11151e;--card:#1b2230;--ink:#edf1f7;--muted:#adb9cc;--line:#394458;--ok:#74dfa0;--degraded:#ffcf70;--offline:#ff919b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif}main{max-width:640px;margin:40px auto;padding:0 20px}header{margin-bottom:24px}h1{font-size:1rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin:0;color:var(--muted)}#state{font-size:2.4rem;font-weight:750;margin:8px 0 0}.offline{color:var(--offline)}.ok{color:var(--ok)}.degraded{color:var(--degraded)}p{margin:4px 0;color:var(--muted)}section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:16px 0}h2{font-size:1rem;margin:0 0 12px}dl{margin:0}.metric,.program{display:flex;gap:16px;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}.metric:last-child,.program:last-child{border:0}dt{color:var(--muted)}dd{margin:0;text-align:right}.program span:first-child{overflow-wrap:anywhere;min-width:0}.program span:last-child{flex-shrink:0}#reason{overflow-wrap:anywhere}footer{font-size:.85rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<header aria-live="polite"><h1>Flex Node</h1><div id="state" class="offline">OFFLINE</div><p id="reason">Waiting for a report</p><p id="last">No report received</p></header>
+<section aria-label="System health"><dl>
+<div class="metric"><dt>Uptime</dt><dd id="uptime">Unknown</dd></div>
+<div class="metric"><dt>Power</dt><dd id="power">Unknown</dd></div>
+<div class="metric"><dt>Battery</dt><dd id="battery">Unknown</dd></div>
+<div class="metric"><dt>CPU</dt><dd id="cpu">Unknown</dd></div>
+<div class="metric"><dt>RAM used</dt><dd id="ram">Unknown</dd></div>
+<div class="metric"><dt>Free disk</dt><dd id="disk">Unknown</dd></div>
+</dl></section>
+<section><h2>Watched programs</h2><div id="programs">No report received</div></section>
+<footer>Refreshes every 60 seconds. Reports over 30 minutes old are offline.</footer>
+</main>
+<script>
+'use strict';
+const el = id => document.getElementById(id);
+const owner = location.hostname.endsWith('.github.io') ? location.hostname.slice(0, -10) : '';
+const repo = location.pathname.split('/').filter(Boolean)[0] || '';
+const source = new URLSearchParams(location.search).get('src') || (owner && repo ? `https://raw.githubusercontent.com/${owner}/${repo}/status/status.json` : '');
+let report = null, fetchFailed = true;
+function validate(d) {
+  return d && d.version === 1 && Number.isFinite(Date.parse(d.time)) && Number.isFinite(Date.parse(d.boot)) &&
+    typeof d.on_ac === 'boolean' && (d.battery_pct === null || Number.isInteger(d.battery_pct)) &&
+    Number.isInteger(d.cpu_pct) && Number.isInteger(d.ram_used_pct) && Number.isFinite(d.disk_free_gb) &&
+    Array.isArray(d.watch) && d.watch.every(p => p && typeof p.name === 'string' && typeof p.running === 'boolean');
+}
+function render() {
+  // abs: a report stamped far in the future (bad clock) must also go stale.
+  const age = report ? Math.abs(Date.now() - Date.parse(report.time)) / 60000 : 0;
+  const down = report && report.watch.some(p => !p.running);
+  const offline = fetchFailed || !report || age > 30;
+  const state = offline ? 'OFFLINE' : down || !report.on_ac ? 'DEGRADED' : 'OK';
+  el('state').textContent = state;
+  el('state').className = state.toLowerCase();
+  el('reason').textContent = fetchFailed ? 'Could not fetch a valid report' : offline ? 'Report is older than 30 minutes' :
+    [down ? 'A watched program is down' : '', !report.on_ac ? 'On battery power' : ''].filter(Boolean).join('; ') || 'All watched programs running; on AC power';
+  el('last').textContent = report ? `Last report ${Math.floor(age)} minutes ago` : 'No report received';
+  if (!report) return;
+  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(report.boot)) / 60000));
+  el('uptime').textContent = `${Math.floor(minutes / 1440)}d ${Math.floor(minutes / 60) % 24}h ${minutes % 60}m`;
+  el('power').textContent = report.on_ac ? 'AC power' : 'Battery';
+  el('battery').textContent = report.battery_pct === null ? 'No battery' : `${report.battery_pct}%`;
+  el('cpu').textContent = `${report.cpu_pct}%`;
+  el('ram').textContent = `${report.ram_used_pct}%`;
+  el('disk').textContent = `${report.disk_free_gb.toFixed(1)} GB`;
+  el('programs').replaceChildren();
+  if (!report.watch.length) el('programs').textContent = 'No programs watched';
+  for (const program of report.watch) {
+    const row = document.createElement('div'); row.className = 'program';
+    const name = document.createElement('span'); name.textContent = program.name;
+    const status = document.createElement('span'); status.textContent = program.running ? 'Running' : 'Down';
+    row.append(name, status); el('programs').append(row);
+  }
+}
+async function refresh() {
+  try {
+    if (!source) throw new Error('Missing source');
+    // AbortController, not AbortSignal.timeout: older phone browsers lack the latter.
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 15000);
+    const response = await fetch(source, {cache: 'no-store', signal: abort.signal}).finally(() => clearTimeout(timer));
+    if (!response.ok) throw new Error('Fetch failed');
+    const data = await response.json();
+    if (!validate(data)) throw new Error('Invalid report');
+    report = data; fetchFailed = false;
+  } catch (_) { fetchFailed = true; }
+  render();
+}
+refresh();
+setInterval(refresh, 60000);
+setInterval(render, 1000);
+</script>
+</body>
+</html>
