@@ -22,6 +22,7 @@
 <div class="metric"><dt>Free disk</dt><dd id="disk">Unknown</dd></div>
 </dl></section>
 <section><h2>Watched programs</h2><div id="programs">No report received</div></section>
+<section><h2>Earnings</h2><div id="earnings">No earnings data</div></section>
 <footer>Refreshes every 60 seconds. Reports over 30 minutes old are offline.</footer>
 </main>
 <script>
@@ -30,6 +31,7 @@ const el = id => document.getElementById(id);
 const owner = location.hostname.endsWith('.github.io') ? location.hostname.slice(0, -10) : '';
 const repo = location.pathname.split('/').filter(Boolean)[0] || '';
 const source = new URLSearchParams(location.search).get('src') || (owner && repo ? `https://raw.githubusercontent.com/${owner}/${repo}/status/status.json` : '');
+const balanceSource = new URLSearchParams(location.search).get('bal') || (owner && repo ? `https://raw.githubusercontent.com/${owner}/${repo}/balances/balances.json` : '');
 let report = null, fetchFailed = true;
 function validate(d) {
   return d && d.version === 1 && Number.isFinite(Date.parse(d.time)) && Number.isFinite(Date.parse(d.boot)) &&
@@ -79,6 +81,42 @@ async function refresh() {
   } catch (_) { fetchFailed = true; }
   render();
 }
+function validateBalances(d) {
+  return d && d.version === 1 && Number.isFinite(Date.parse(d.time)) && Array.isArray(d.apps) &&
+    d.apps.every(p => p && typeof p.name === 'string' && (p.usd === null || (typeof p.usd === 'number' && Number.isFinite(p.usd))) &&
+      (p.error === null || typeof p.error === 'string'));
+}
+async function refreshBalances() {
+  try {
+    if (!balanceSource) throw new Error('Missing source');
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 15000);
+    const response = await fetch(balanceSource, {cache: 'no-store', signal: abort.signal}).finally(() => clearTimeout(timer));
+    if (!response.ok) throw new Error('Fetch failed');
+    const data = await response.json();
+    if (!validateBalances(data)) throw new Error('Invalid balances');
+    el('earnings').replaceChildren();
+    let total = 0;
+    for (const app of data.apps) {
+      const row = document.createElement('div'); row.className = 'program';
+      const name = document.createElement('span'); name.textContent = app.name;
+      const value = document.createElement('span');
+      value.textContent = app.usd === null ? app.error : `$${app.usd.toFixed(2)}`;
+      if (app.usd !== null) total += app.usd;
+      row.append(name, value); el('earnings').append(row);
+    }
+    const row = document.createElement('div'); row.className = 'program';
+    const name = document.createElement('span'); name.textContent = 'Total';
+    const value = document.createElement('span'); value.textContent = `$${total.toFixed(2)}`;
+    row.append(name, value); el('earnings').append(row);
+    const age = Math.max(0, (Date.now() - Date.parse(data.time)) / 60000);
+    const updated = document.createElement('p');
+    updated.textContent = age > 90 ? `Updated ${Math.floor(age / 60)} hours ago` : `Updated ${Math.floor(age)} minutes ago`;
+    el('earnings').append(updated);
+  } catch (_) { el('earnings').textContent = 'No earnings data'; }
+}
+refreshBalances();
+setInterval(refreshBalances, 60000);
 refresh();
 setInterval(refresh, 60000);
 setInterval(render, 1000);

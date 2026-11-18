@@ -1,0 +1,8 @@
+{
+  "time": "2026-11-17T12:00:00.000Z",
+  "apps": [
+    { "name": "Honeygain", "usd": 1.23, "error": null },
+    { "name": "Pawns", "usd": null, "error": "token expired" }
+  ],
+  "version": 1
+}

@@ -49,6 +49,7 @@ The token must allow writes to `status`; branch protection can prevent updates.
 
 Public data: report and boot timestamps, AC status, battery percentage, CPU and
 RAM percentages, system-drive free GB, and watched process names/running states.
+Earnings data includes app names, dollar balances, errors, and an update timestamp.
 No hostname, username, IP address, or filesystem path is included in status data.
 Use only process names you are comfortable making public.
 The token and healthcheck URL stay in ignored `.env`; never commit that file.
@@ -58,6 +59,23 @@ endpoint. Successful checks send a plain GET. Upload and ping fail independently
 Fine-grained tokens expire. Renew the token in `.env` before expiry.
 If it expires, the page becomes OFFLINE after 30 minutes while healthchecks
 still pings, provided the reporter and network are working.
+
+## Earnings on the page
+
+Run `balances.ps1` on a trusted machine that is not the earning laptop.
+That machine needs the GitHub CLI installed and signed in with repository write access.
+For Honeygain, sign in at dashboard.honeygain.com, press F12, open Application,
+then Local Storage, and copy the value of the key `JWT`.
+For Pawns, sign in to its dashboard, press F12, open Network, and click a request
+to `api.pawns.app`. Under Request Headers, copy the `Authorization` value
+without the word `Bearer`.
+Paste the tokens into `HONEYGAIN_TOKEN` and `PAWNS_TOKEN` in `.env` next to the script.
+Run `.\balances.ps1 -DryRun` to check, then `.\balances.ps1` to publish.
+The script replaces the `balances` branch with one parentless commit.
+Tokens expire; the page then shows `token expired`. Replace them in `.env`.
+Balances are public to anyone with the page link.
+These are unofficial endpoints and can break.
+For a local preview, add `&bal=balances.sample.json` to the sample page URL below.
 
 ## Check locally
 
