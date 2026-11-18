@@ -76,7 +76,10 @@ try {
             $null = Send-Git POST 'refs' @{ ref = 'refs/heads/status'; sha = $commit.sha }
         } else { throw }
     }
-} catch { [Console]::Error.WriteLine('Status publish failed.'); $failed = $true }
+} catch {
+    # The HTTP status and GitHub's reply say why; neither contains the token.
+    [Console]::Error.WriteLine("Status publish failed: $($_.Exception.Message) $($_.ErrorDetails.Message)"); $failed = $true
+}
 if ($config.HEALTHCHECK_URL) {
     try {
         if (@($watch | Where-Object { -not $_.running }).Count) {
