@@ -1,0 +1,16 @@
+{
+    "time":  "2026-11-21T17:13:56.381Z",
+    "apps":  [
+                 {
+                     "name":  "Honeygain",
+                     "usd":  null,
+                     "error":  "no token"
+                 },
+                 {
+                     "name":  "Pawns",
+                     "usd":  null,
+                     "error":  "no token"
+                 }
+             ],
+    "version":  1
+}
